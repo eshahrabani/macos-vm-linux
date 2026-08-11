@@ -1,0 +1,26 @@
+# macos-vm configuration. Copy to macos-vm.conf and edit, or export as
+# environment variables. Every value shown here is the default.
+
+# VM resources
+#VCPU=8
+#RAM=12G
+#DISK_SIZE_G=80
+
+# CPU model for the guest (pinned: works for Big Sur .. macOS 26/Tahoe)
+#CPU_MODEL="Skylake-Client,-hle,-rtm,kvm=on,vendor=GenuineIntel,+invtsc,vmware-cpuid-freq=on,+ssse3,+sse4.2,+popcnt,+avx,+aes,+xsave,+xsaveopt,check"
+
+# Display: gtk (window) | vnc (127.0.0.1:5900) | none
+#DISPLAY=gtk
+
+# SSH port forwarded from guest to host
+#SSH_PORT=2222
+#SSH_USER=mac
+
+# Guest NIC MAC address (keep fixed so macOS network config is stable)
+#MAC=52:54:00:c9:18:27
+
+# Cap on the macOS major version the installer will resolve (last Intel release)
+#MAX_MACOS=26
+
+# Everything VM-related lives here (downloaded images, disk, logs)
+#DATA_DIR=data

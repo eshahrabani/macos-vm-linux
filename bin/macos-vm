@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# macos-vm — run macOS in a KVM VM for Apple development.
+#
+#   install              download + extract the latest macOS installer, boot it
+#   run                  boot the installed macOS
+#   stop                 shut the VM down cleanly
+#   status               is it running?
+#   ssh [user]           ssh into the VM (port $SSH_PORT)
+#   snapshot list|save <name>|restore <name>   qcow2 snapshots (VM must be stopped)
+#   resize <size>G       grow the target disk (grow APFS in the VM: diskutil apfs resizeContainer disk0s2 0)
+#   check                verify host prerequisites
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=lib/common.sh
+source "$ROOT/lib/common.sh"
+
+usage() {
+  sed -n '2,12p' "${BASH_SOURCE[0]}" | sed 's/^#   /  /; s/^#//'
+}
+
+cmd_ssh() {
+  vm_running || die "VM is not running"
+  exec ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+    -p "$SSH_PORT" "${1:-$SSH_USER}@localhost"
+}
+
+cmd_snapshot() {
+  [ -f "$DISK" ] || die "no VM yet — run 'macos-vm install' first"
+  vm_running && die "stop the VM before snapshot operations"
+  case "${1:-}" in
+    list)
+      qemu-img snapshot -l "$DISK"
+      ;;
+    save)
+      [ -n "${2:-}" ] || die "usage: macos-vm snapshot save <name>"
+      qemu-img snapshot -c "$2" "$DISK"
+      log "snapshot '$2' saved"
+      ;;
+    restore)
+      [ -n "${2:-}" ] || die "usage: macos-vm snapshot restore <name>"
+      qemu-img snapshot -a "$2" "$DISK"
+      log "snapshot '$2' restored"
+      ;;
+    *)
+      die "usage: macos-vm snapshot {list|save <name>|restore <name>}"
+      ;;
+  esac
+}
+
+cmd_resize() {
+  [ -f "$DISK" ] || die "no VM yet — run 'macos-vm install' first"
+  vm_running && die "stop the VM before resizing"
+  local size="${1:-}"
+  [ -n "$size" ] || die "usage: macos-vm resize <size>G  (e.g. macos-vm resize 120G)"
+  qemu-img resize "$DISK" "$size"
+  log "disk grown to $size — inside macOS run: diskutil apfs resizeContainer disk0s2 0"
+}
+
+case "${1:-}" in
+  install)  source "$ROOT/lib/install.sh"; cmd_install ;;
+  run)      source "$ROOT/lib/run.sh"; cmd_run ;;
+  stop)     source "$ROOT/lib/run.sh"; cmd_stop ;;
+  status)   source "$ROOT/lib/run.sh"; cmd_status ;;
+  ssh)      cmd_ssh "${2:-}" ;;
+  snapshot) cmd_snapshot "${2:-}" "${3:-}" ;;
+  resize)   cmd_resize "${2:-}" ;;
+  check)    prereq_check; log "host prerequisites OK" ;;
+  *)        usage; exit 1 ;;
+esac
