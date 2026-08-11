@@ -50,4 +50,13 @@ real change.
   InstallMacOS.dmg payload (offline install). SMBIOS: vendor config
   placeholder serials (Xcode/Apple-ID sign-in fine; iMessage won't work —
   documented).
+- 2026-08-11: macOS 26 (Tahoe) changed the installer format mid-install:
+  pkg now embeds SharedSupport.dmg (mobile-asset OS payload only, nothing
+  bootable; 7z 23.01 can't read the 18G xar entry). Added lib/xar_extract.py
+  (stdlib xar reader, sha1-verified) + lib/recovery.py (osrecovery
+  macrecovery protocol: bootable recovery + CNKL chunklist; tokens AT/CT
+  pin exact URLs). install.sh now branches old/new format; old path kept
+  for MAX_MACOS=15 (Sequoia). Tahoe: boot recovery BaseSystem.img + attach
+  SharedSupport.img payload (offline if recovery accepts local assets,
+  else in-VM download).
 - Tooling: lint = `bash -n` on all scripts (no task runner, no tests yet).

@@ -10,7 +10,7 @@
 #CPU_MODEL="Skylake-Client,-hle,-rtm,kvm=on,vendor=GenuineIntel,+invtsc,vmware-cpuid-freq=on,+ssse3,+sse4.2,+popcnt,+avx,+aes,+xsave,+xsaveopt,check"
 
 # Display: gtk (window) | vnc (127.0.0.1:5900) | none
-#DISPLAY=gtk
+#VM_DISPLAY=gtk
 
 # SSH port forwarded from guest to host
 #SSH_PORT=2222

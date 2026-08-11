@@ -49,21 +49,36 @@ References (pinned):
    (Docker-OSX fetch-macOS.py; also index-11-... variant). Products containing
    an InstallAssistant.pkg are macOS installers; version from the product's
    Distribution plist. Cap at macOS 26 (Tahoe — last Intel; works per
-   OSX-KVM). Parse with python3 stdlib plistlib (~40 lines).
-2. Download `InstallAssistant.pkg` (~13-15G) with curl `-C -` resume.
-3. `7z x InstallAssistant.pkg` → `Payload/InstallESD.dmg`.
-   7-Zip 23.01 (Ubuntu `7zip` pkg, already installed) reads DMG, HFS, APFS,
-   GPT — verified via `7z i` format table. No root needed.
-4. `7z x InstallESD.dmg -oESD/` → yields `BaseSystem.dmg`,
-   `BaseSystem.chunklist`, `SharedSupport/InstallMacOS.dmg`.
-5. `dmg2img -i BaseSystem.dmg BaseSystem.img` (apt `dmg2img` — the one
-   missing package on this host; OSX-KVM README uses the same command).
-6. Boot: OpenCore.qcow2 (sata.2) + BaseSystem.img (sata.3) + InstallESD.img
-   (sata.5, the whole converted ESD — provides InstallMacOS.dmg to the
-   recovery, same layout as createinstallmedia USB media) + blank target
-   qcow2 (sata.4). Recovery installs offline; no in-VM re-download.
-   Fallback if BaseSystem.img boot hiccups: OpenCore can boot the ESD's
-   .IABootFiles directly (HFS+ boot via HfsPlus.efi).
+   OSX-KVM). Parse with python3 stdlib plistlib (lib/catalog.py).
+2. Download `InstallAssistant.pkg` (~18G) with curl `-C -` resume. Integrity:
+   verified against the xar ToC's per-entry sha1 (lib/xar_extract.py).
+3. Installer format changed at macOS 26 (Tahoe):
+   - **old (15 and earlier)**: 7z x pkg → Payload/InstallESD.dmg →
+     dmg2img BaseSystem.dmg→img (boot) + attach InstallESD.img (payload).
+     InstallMacOS.dmg layout = createinstallmedia media; offline install.
+   - **new (26/Tahoe)**: pkg xar embeds `SharedSupport.dmg` (18G, raw entry)
+     containing ONLY the OS payload as mobile assets
+     (`Shared Support/com_apple_MobileAsset_MacSoftwareUpdate`) — nothing
+     bootable, not even the MacUpdateBrain zip (that's installer plumbing).
+     7-Zip 23.01's xar reader FAILS on the 18G entry (misreports sizes).
+     Extraction via lib/xar_extract.py (stdlib xar reader; heap-relative
+     offsets; <length> = archive bytes, <size> = extracted; "gzip" blocks are
+     zlib streams; sha1-verified against the ToC).
+   - **Tahoe boot source**: Apple's osrecovery.apple.com macrecovery protocol
+     (lib/recovery.py): POST InstallationPayload/RecoveryImage with
+     bid=Mac-CFF7D910A743CAAF (Tahoe-supported Intel model), os=latest →
+     BaseSystem.dmg (~900M) + chunklist (CNKL). Tokens: AT (image) and CT
+     (chunklist) — each pins its exact URL. Chunklist download needs CT;
+     md5 in the token is of the CDN response, not usable for verification —
+     chunklist sha256 chunk verify is the integrity check (lib/recovery.py).
+     Product 140-77966 pairs with pkg 140-77964 (same 26.6.1 generation).
+   - Boot: recovery BaseSystem.img (sata.3) + SharedSupport.img raw payload
+     (sata.5); recovery's installer reads the mobile assets off the attached
+     volume for a local install; network fallback if it insists on newer.
+4. `dmg2img` is the only apt gap (missing on this host; OSX-KVM README uses
+   it too). No `-q` flag in dmg2img 1.6.7.
+5. Boot: OpenCore.qcow2 (sata.2) + boot image (sata.3) + payload volume
+   (sata.5) + blank target qcow2 (sata.4).
 
 ## Resource defaults (owner decision)
 

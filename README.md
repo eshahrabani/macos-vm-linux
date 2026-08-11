@@ -27,8 +27,14 @@ build, nothing to configure beyond optional knobs.
 
 In the VM: OpenCore's boot menu → pick **macOS Base System** → macOS recovery →
 **Install macOS** → select the ~80 GB disk → it formats and installs
-(~30–60 min). When it reboots, the OpenCore menu offers your new macOS — pick
-it, walk through setup, and you're done.
+(~30–60 min; the first estimate shown is pessimistic). When it reboots, the
+OpenCore menu offers your new macOS — pick it, walk through setup, and you're done.
+
+Two installer formats are handled automatically: macOS 26 (Tahoe) ships its
+OS payload as a `SharedSupport.dmg` (bootable recovery is fetched from
+Apple's osrecovery service — both downloads automatic); Sequoia 15 and
+earlier keep the classic `InstallESD.dmg` layout. Set `MAX_MACOS=15` in
+`macos-vm.conf` to pin the classic format.
 
 Afterwards, plain boots:
 
@@ -51,7 +57,7 @@ settings have sane defaults:
 | var | default | meaning |
 |---|---|---|
 | `VCPU` / `RAM` / `DISK_SIZE_G` | `8` / `12G` / `80` | VM resources |
-| `DISPLAY` | `gtk` | `gtk` window, `vnc` (127.0.0.1:5900), or `none` |
+| `VM_DISPLAY` | `gtk` | `gtk` window, `vnc` (127.0.0.1:5900), or `none` |
 | `SSH_PORT` / `SSH_USER` | `2222` / `mac` | forwarded ssh |
 | `CPU_MODEL` | Skylake-Client pin | see `docs/research.md` |
 | `MAX_MACOS` | `26` | highest macOS major the installer will resolve |

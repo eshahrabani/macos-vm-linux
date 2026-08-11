@@ -13,7 +13,7 @@ VCPU="${VCPU:-8}"
 RAM="${RAM:-12G}"
 DISK_SIZE_G="${DISK_SIZE_G:-80}"
 CPU_MODEL="${CPU_MODEL:-Skylake-Client,-hle,-rtm,kvm=on,vendor=GenuineIntel,+invtsc,vmware-cpuid-freq=on,+ssse3,+sse4.2,+popcnt,+avx,+aes,+xsave,+xsaveopt,check}"
-DISPLAY="${DISPLAY:-gtk}"
+VM_DISPLAY="${VM_DISPLAY:-gtk}"
 SSH_PORT="${SSH_PORT:-2222}"
 SSH_USER="${SSH_USER:-mac}"
 MAC="${MAC:-52:54:00:c9:18:27}"
@@ -34,6 +34,10 @@ INSTALL_ESD_IMG="$DATA_DIR/InstallESD.img"
 PKG="$DATA_DIR/InstallAssistant.pkg"
 PKG_DIR="$DATA_DIR/installer-pkg"
 ESD_DIR="$DATA_DIR/esd"
+SHARED_SUPPORT="$DATA_DIR/SharedSupport.dmg"
+RECOVERY_DMG="$DATA_DIR/Recovery.dmg"
+RECOVERY_CNK="$DATA_DIR/Recovery.chunklist"
+RECOVERY_BOARD_ID="${RECOVERY_BOARD_ID:-Mac-CFF7D910A743CAAF}"
 VERSION_FILE="$DATA_DIR/version.txt"
 PID_FILE="$DATA_DIR/qemu.pid"
 MONITOR_SOCK="$DATA_DIR/monitor.sock"
@@ -103,10 +107,10 @@ vm_running() {
 }
 
 vm_display_args() {
-  case "$DISPLAY" in
+  case "$VM_DISPLAY" in
     gtk)  echo "-display gtk" ;;
     vnc)  echo "-display vnc=127.0.0.1:5900" ;;
     none) echo "-display none" ;;
-    *)    die "unknown DISPLAY '$DISPLAY' (gtk|vnc|none)" ;;
+    *)    die "unknown VM_DISPLAY '$VM_DISPLAY' (gtk|vnc|none)" ;;
   esac
 }

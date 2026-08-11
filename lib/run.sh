@@ -50,7 +50,7 @@ cmd_run() {
     args+=($line)
   done < <(qemu_args "$mode")
 
-  log "starting VM ($VCPU vCPU / $RAM, display=$DISPLAY, ssh port $SSH_PORT)"
+  log "starting VM ($VCPU vCPU / $RAM, display=$VM_DISPLAY, ssh port $SSH_PORT)"
   nohup qemu-system-x86_64 "${args[@]}" > "$QEMU_LOG" 2>&1 &
   sleep 2
   vm_running || { warn "qemu exited immediately — last log lines:"; tail -5 "$QEMU_LOG" >&2; exit 1; }
