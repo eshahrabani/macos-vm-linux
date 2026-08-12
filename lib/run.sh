@@ -16,18 +16,18 @@ qemu_args() { # $1 = "" | "install" (attach installer media)
     -smbios type=2 \
     -device ich9-intel-hda -device hda-duplex \
     -device ich9-ahci,id=sata \
-    -drive id=OpenCoreBoot,if=none,snapshot=on,format=qcow2,file="$OPEN_CORE" \
+    -drive id=OpenCoreBoot,if=none,snapshot=on,cache=writeback,format=qcow2,file="$OPEN_CORE" \
     -device ide-hd,bus=sata.2,drive=OpenCoreBoot \
     $([ "$mode" = install ] && printf '%s\n' \
       -drive id=InstallMedia,if=none,format=raw,file="$BASE_SYSTEM_IMG" \
       -device ide-hd,bus=sata.3,drive=InstallMedia \
       -drive id=InstallPayload,if=none,format=raw,file="$INSTALL_ESD_IMG" \
       -device ide-hd,bus=sata.5,drive=InstallPayload) \
-    -drive id=MacHDD,if=none,format=qcow2,file="$DISK" \
+    -drive id=MacHDD,if=none,cache=writeback,format=qcow2,file="$DISK" \
     -device ide-hd,bus=sata.4,drive=MacHDD \
     -netdev user,id=net0,hostfwd=tcp::"$SSH_PORT"-:22 \
     -device virtio-net-pci,netdev=net0,id=net0,mac="$MAC" \
-    -device vmware-svga \
+    -device vmware-svga,vgamem_mb=64 \
     $(vm_display_args) \
     -monitor unix:"$MONITOR_SOCK",server,nowait \
     -pidfile "$PID_FILE"

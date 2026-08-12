@@ -92,4 +92,12 @@ real change.
   sign-in gate (VMHide) were both real blockers; the persistence bug had
   hidden that the earlier fixes were never actually applied to the guest.
   README/research docs updated to the verified state.
+- 2026-08-11: UI performance work. Root cause: vmware-svga has no macOS GPU
+  driver → WindowServer software-renders; genie minimize at 1080p froze the
+  VM for seconds. GPU accel verdict (documented): impossible on this host —
+  no macOS 26 NVIDIA drivers (RTX 3080 useless even via VFIO), UHD 630
+  disabled in BIOS, no macOS virtio-gpu driver; only path is a passthrough
+  AMD GPU (e.g. used RX 580). Fixes: `macos-vm tune` (minimize-effect=scale,
+  reduceMotion/reduceTransparency via ssh), guest display at 1280x800 + GTK
+  Zoom to Fit, host-side vgamem_mb=64 + cache=writeback on drives.
 - Tooling: lint = `bash -n` on all scripts (no task runner, no tests yet).

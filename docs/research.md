@@ -163,3 +163,22 @@ sign-in succeeds.
 8 vCPU (1 socket × 8 cores) / 12 GB / 80 GB sparse qcow2 target disk.
 Host: Ubuntu 24.04, QEMU 8.2.2, i9-10900K (AVX2 ✓), 31 GB RAM,
 /dev/kvm accessible via ACL, 7-Zip 23.01 present.
+
+## UI performance: software rendering (2026-08-11)
+
+`vmware-svga` has no macOS driver — WindowServer composites in software
+(AppleSoftwareRenderer), cost scales with pixels × effect complexity. The
+genie minimize at 1080p caused 5-10 s freezes. Fixes (all in place):
+
+- Guest-side (`macos-vm tune`): dock minimize-effect → `scale`,
+  reduceMotion + reduceTransparency (universalaccess defaults); display set
+  to 1280x800 in System Settings; GTK View > Zoom to Fit scales the window
+  on the 4K monitor without raising guest res.
+- Host-side: `-device vmware-svga,vgamem_mb=64` (VRAM headroom) and
+  `cache=writeback` on the disk drives.
+- GPU acceleration verdict: not possible on this host. macOS 26 has no
+  NVIDIA drivers (RTX 3080 unusable even via VFIO); the UHD 630 iGPU is
+  disabled in BIOS (would need BIOS change + experimental VFIO); no
+  virtio-gpu/virgl driver exists for macOS. Only real path: VFIO passthrough
+  of a dedicated AMD GPU (used RX 580 = Polaris, ships in iMac19,1 so Tahoe
+  drivers exist). Documented, not built.

@@ -44,6 +44,7 @@ Afterwards, plain boots:
 ./bin/macos-vm status    # running? disk? installer version?
 ./bin/macos-vm ssh       # ssh into the VM (port 2222, user: mac — or pass one)
 ./bin/macos-vm smbios    # show/generate/check/reset the Apple-facing identity
+./bin/macos-vm tune      # in-guest performance tweaks (see "Performance")
 ./bin/macos-vm check     # verify host prerequisites
 ```
 
@@ -124,6 +125,35 @@ stays. This VM was verified on `iMac20,1`.
 
 Files in and out: `scp -P 2222 file mac@localhost:` / `./bin/macos-vm ssh`.
 
+## Performance
+
+The macOS UI is software-rendered: QEMU's `vmware-svga` framebuffer has no
+macOS GPU driver, so WindowServer composites every frame on the CPU
+(AppleSoftwareRenderer). Render cost scales with pixels and animation
+complexity — the genie minimize effect at 1920x1080 is the worst offender
+(seconds-long freezes). These tweaks make the UI dramatically smoother:
+
+```sh
+./bin/macos-vm tune      # needs Remote Login on in the guest (System Settings
+                         # > General > Sharing); sets minimize effect to "scale",
+                         # reduces motion + transparency
+```
+
+Then, once, in System Settings > Displays, pick **1280x800 (scaled)** — fewer
+pixels = proportionally less WindowServer work. On a 4K monitor, enlarge the
+window with the GTK menu: **View > Zoom to Fit** (scales up, guest resolution
+stays low).
+
+Host-side, the VM already boots with a 64 MB SVGA framebuffer and
+`cache=writeback` on the disks (I/O stalls don't compound with render stalls).
+
+**GPU acceleration isn't possible on this hardware.** macOS 26 has no NVIDIA
+drivers (your RTX 3080 can't accelerate the guest even via passthrough), the
+UHD 630 iGPU is disabled in BIOS, and no virtio-gpu/virgl driver exists for
+macOS. The only real path is VFIO passthrough of a dedicated AMD GPU (e.g. a
+used RX 580 — same chip iMac19,1 ships) — possible, but it needs new
+hardware and host-level setup; see `docs/research.md`.
+
 ## How it works
 
 Boot chain: OVMF (UEFI) → OpenCore (vendored prebuilt, iMac19,1 SMBIOS) →
@@ -144,7 +174,8 @@ with the public OSK.
   machine's serial — see the account-safety note above). Apple ID sign-in,
   App Store, and Xcode/Developer workflows work with the generated identity.
 - No GPU acceleration — Xcode builds are CPU-bound, but the macOS UI is
-  software-rendered (snappy, not Metal).
+  software-rendered. Run `macos-vm tune` + a lower display resolution (see
+  "Performance") to keep the UI smooth.
 - SATA is the disk path (macOS has no stock virtio-blk). Put the target disk
   on fast NVMe storage.
 - The hypervisor fingerprint can't be fully hidden from the kernel
