@@ -59,4 +59,31 @@ real change.
   for MAX_MACOS=15 (Sequoia). Tahoe: boot recovery BaseSystem.img + attach
   SharedSupport.img payload (offline if recovery accepts local assets,
   else in-VM download).
+- 2026-08-11: Apple ID sign-in failed on the installed VM (placeholder
+  SMBIOS `W00000000001` in the vendored OpenCore). Added lib/smbios.py
+  (macserial algorithm port, cross-validated against the C binary; models
+  iMac19,1 default + iMac20,1 Tahoe-supported fallback) + lib/smbios.sh
+  (qemu-nbd + sudo injection into EFI/OC/config.plist; identity persisted in
+  data/smbios.conf, never rotated; ROM set from fixed MAC; `smbios
+  show|generate|set|check|reset`; auto-inject on first `run`; real serials
+  refused without ALLOW_REAL_SERIAL=1). Apple-side checks are advisory only
+  (checkcoverage is a JS SPA; osrecovery accepts placeholders). Sign-in is
+  the authoritative test; iMac20,1 is the fallback if it still errors.
+- 2026-08-11: Apple ID sign-in STILL failed with valid generated SMBIOS on
+  both iMac19,1 and iMac20,1. Root cause found: macOS 15+ gates sign-in on
+  kern.hv_vmm_present (KVM reports 1, cannot be hidden by QEMU flags) —
+  dockur/macos#227 proves Sonoma works / Sequoia+ fails for everyone
+  regardless of serial. Fix: VMHide (Lilu plugin) + Lilu upgrade to 1.7.2,
+  injected into the OpenCore image in the same qemu-nbd mount (Kexts sync +
+  Kernel/Add entry, MinKernel=15.0.0); pinned VMHide 2.0.0 (Tahoe support),
+  Lilu 1.7.2 (vendored image ships 1.6.8). Tracked by SMBIOS_VMHIDE=1 in
+  smbios.conf.
+- 2026-08-11: injection-persistence bug found: smbios_cleanup disconnected
+  the nbd device BEFORE unmounting, silently dropping all filesystem writes —
+  the qcow2 stayed pristine (guest always booted placeholder SMBIOS; every
+  sign-in test was invalid). Harness's fake umount masked it (it synced the
+  fixture). Fixed: umount-then-disconnect order + `smbios_verify` re-mounts
+  read-only after every injection and dies loudly if the write did not
+  persist or VMHide.kext is missing. Harness now enforces order (fake
+  disconnect fails if the mount is still populated).
 - Tooling: lint = `bash -n` on all scripts (no task runner, no tests yet).

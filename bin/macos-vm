@@ -8,6 +8,7 @@
 #   ssh [user]           ssh into the VM (port $SSH_PORT)
 #   snapshot list|save <name>|restore <name>   qcow2 snapshots (VM must be stopped)
 #   resize <size>G       grow the target disk (grow APFS in the VM: diskutil apfs resizeContainer disk0s2 0)
+#   smbios show|generate|set SERIAL MLB UUID [MODEL]|check|reset   SMBIOS identity
 #   check                verify host prerequisites
 
 set -euo pipefail
@@ -66,6 +67,7 @@ case "${1:-}" in
   ssh)      cmd_ssh "${2:-}" ;;
   snapshot) cmd_snapshot "${2:-}" "${3:-}" ;;
   resize)   cmd_resize "${2:-}" ;;
+  smbios)   source "$ROOT/lib/smbios.sh"; cmd_smbios "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}" ;;
   check)    prereq_check; log "host prerequisites OK" ;;
   *)        usage; exit 1 ;;
 esac

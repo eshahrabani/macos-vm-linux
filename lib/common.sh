@@ -20,6 +20,14 @@ MAC="${MAC:-52:54:00:c9:18:27}"
 MAX_MACOS="${MAX_MACOS:-26}"
 OSK="ourhardworkbythesewordsguardedpleasedontsteal(c)AppleComputerInc"
 
+# SMBIOS identity (see lib/smbios.sh). Generated once, persisted to
+# data/smbios.conf; SMBIOS_* here are optional overrides (macos-vm.conf).
+SMBIOS_MODEL="${SMBIOS_MODEL:-iMac19,1}"
+SMBIOS_SERIAL="${SMBIOS_SERIAL:-}"
+SMBIOS_MLB="${SMBIOS_MLB:-}"
+SMBIOS_UUID="${SMBIOS_UUID:-}"
+ALLOW_REAL_SERIAL="${ALLOW_REAL_SERIAL:-0}"
+
 # Pinned reference versions (see docs/research.md)
 OSXKVM_COMMIT="4c378a4b5e0b219783683012bec680325eb40719"
 ASSETS_BASE="https://raw.githubusercontent.com/kholia/OSX-KVM/$OSXKVM_COMMIT"
@@ -43,7 +51,7 @@ PID_FILE="$DATA_DIR/qemu.pid"
 MONITOR_SOCK="$DATA_DIR/monitor.sock"
 QEMU_LOG="$DATA_DIR/qemu.log"
 
-log()  { printf '\033[1;36m[macos-vm]\033[0m %s\n' "$*"; }
+log()  { printf '\033[1;36m[macos-vm]\033[0m %s\n' "$*" >&2; }
 warn() { printf '\033[1;33m[macos-vm] WARNING:\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31m[macos-vm] ERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 

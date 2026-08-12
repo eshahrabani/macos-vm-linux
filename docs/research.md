@@ -37,9 +37,71 @@ References (pinned):
   prebuilt bootable EFI qcow2 (Lilu/VirtualSMC/WhateverGreen/AppleALC kexts,
   HfsPlus driver, iMac19,1 SMBIOS with placeholder serial W00000000001).
   `ShowPicker=External` → OpenCore boot menu on every boot (installer and
-  installed macOS both selectable). No serialgen/config injection needed
-  (iMessage won't work with placeholder serials — documented; Xcode and
-  Apple-ID sign-in fine).
+  installed macOS both selectable).
+- The ESP inside is a 146.5 MiB FAT16 partition (GPT, LBA 2048), not the
+  FAT32 a casual look expects; config.plist lives at `/EFI/OC/config.plist`.
+- QEMU `-smbios` args are ignored for these tables: OpenCore's
+  `UpdateSMBIOS` rewrites type 1/2/3 from its config.plist. The plist is the
+  only injection point.
+
+## SMBIOS identity (lib/smbios.py + lib/smbios.sh, 2026-08-11)
+
+Apple ID sign-in fails ("verification failed. An unknown error occurred.")
+with the placeholder serial `W00000000001` — Apple validates serial format +
+model on their sign-in stack. Fix: generate a coherent identity and inject it.
+
+- **Algorithm**: port of acidanthera `macserial` (OpenCorePkg
+  `Utilities/macserial`, BSD-3-Clause) — the serial/MLB generation and
+  checksum (base-34, mod 34 — the `sizeof(alphabet)-1` modulus tripwire) were
+  cross-validated both directions against a locally compiled `macserial`
+  binary. Tables vendored for exactly two models: iMac19,1
+  (`Mac-AA95B1DDAB278B95`) and iMac20,1 (`Mac-CFF7D910A743CAAF` — which also
+  matches the recovery.py Tahoe board-id, so the fallback model aligns the
+  whole install chain).
+- **Injection**: mount OpenCore.qcow2 via `qemu-nbd` (nbd module + sudo,
+  same pattern as `ensure_ignore_msrs`), edit `PlatformInfo/Generic`
+  {SystemSerialNumber, MLB, SystemUUID, ROM} with plistlib, unmount. ROM is
+  set to the MAC-derived value (525400c91827) — the stock placeholder
+  `112233445566` is shared by every OSX-KVM user (duplicate-identity vector).
+- **Stability (account-safety)**: identity generated once, persisted in
+  `data/smbios.conf`, never rotated (serial churn is a device-farming
+  signal). `smbios reset` re-fetches the pinned pristine qcow2; the pristine
+  plist is also backed up on first injection. `smbios show` reports
+  conf-vs-plist drift.
+- **Model switch**: `SMBIOS_MODEL=iMac20,1` regenerates serial+MLB for the
+  new model (they encode the model), keeps UUID/ROM. iMac19,1 is the default
+  (matches the vendored plist); iMac20,1 is the Tahoe-supported fallback if
+  sign-in still errors.
+- **Checks** (`macos-vm smbios check`, advisory): checkcoverage.apple.com is
+  a JS SPA since 2025 — the form/JSON endpoints don't answer without a
+  browser session, so it reports unreachable; osrecovery.apple.com answers
+  for the board-id+sn tuple (same protocol as lib/recovery.py) but accepts
+  placeholders too — neither is a hard validity gate. The authoritative test
+  is Apple ID sign-in inside the VM.
+- **Real serials are a hard "no" by default**: `smbios set` requires
+  `ALLOW_REAL_SERIAL=1`; using a serial from a real machine you don't own is
+  the documented #1 account-flag vector (serial reuse across accounts), not
+  VM detection.
+
+## macOS 15+ blocks Apple ID sign-in in VMs — VMHide (2026-08-11)
+
+Even with a fully valid generated SMBIOS, Apple ID sign-in on Sequoia and
+Tahoe fails with "verification failed. An unknown error occurred." The
+blocker is not SMBIOS: dockur/macos issue #227 confirms sign-in works on
+Sonoma (14) and breaks on Sequoia (15) for everyone, including users with
+verified-unused GenSMBIOS serials. macOS 15+ gates sign-in on
+`kern.hv_vmm_present` (the same mechanism Apple's "limited iCloud in
+Hypervisor.framework VMs" doc describes); KVM reports hv_vmm_present=1 and
+there is no QEMU flag to hide it.
+
+Fix (community-verified): **VMHide** (Carnations-Botanica/VMHide) — a Lilu
+plugin that reroutes `sysctl kern.hv_vmm_present` for Apple ID processes.
+Pinned: VMHide 2.0.0 (commit "Update for Tahoe suppot OOB"), Lilu 1.7.2
+(VMHide needs Lilu ≥ 1.7.0; the vendored OSX-KVM image ships 1.6.8, so the
+image's Lilu.kext is replaced too). Injection: same qemu-nbd mount — copy
+both .kext bundles into EFI/OC/Kexts/ and add the VMHide entry
+(MinKernel=15.0.0) to Kernel/Add. Kexts are fetched to data/vmhide/
+(pinned URLs) and the state is tracked by SMBIOS_VMHIDE=1 in smbios.conf.
 
 ## Full-installer-on-host path (user decision; neither reference ships this
 ## today — OSX-KVM primary flow is recovery-only via fetch-macOS-v2.py)

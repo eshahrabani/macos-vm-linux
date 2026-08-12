@@ -29,7 +29,7 @@ def rand_id(n):
     return "".join(random.choice("0123456789abcdef") for _ in range(n))
 
 
-def fetch_metadata(board_id, os_type="latest"):
+def fetch_metadata(board_id, os_type="latest", sn="00000000000000000"):
     req = urllib.request.Request("http://%s/" % HOST, headers={"Host": HOST, "User-Agent": UA})
     with urllib.request.urlopen(req, timeout=30) as r:
         session = next(
@@ -39,8 +39,8 @@ def fetch_metadata(board_id, os_type="latest"):
     if not session:
         raise RuntimeError("no session from osrecovery")
 
-    post = "cid=%s\nsn=00000000000000000\nbid=%s\nk=%s\nfg=%s\nos=%s" % (
-        rand_id(16), board_id, rand_id(64), rand_id(64), os_type
+    post = "cid=%s\nsn=%s\nbid=%s\nk=%s\nfg=%s\nos=%s" % (
+        rand_id(16), sn, board_id, rand_id(64), rand_id(64), os_type
     )
     req = urllib.request.Request(
         "http://%s/InstallationPayload/RecoveryImage" % HOST,

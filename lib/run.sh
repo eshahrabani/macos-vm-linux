@@ -43,6 +43,11 @@ cmd_run() {
   vm_running && die "VM is already running (pid $(cat "$PID_FILE")). Use 'macos-vm stop' or 'macos-vm status'."
   rm -f "$MONITOR_SOCK"
 
+  # First boot after install: generate + inject a valid SMBIOS identity
+  # (the vendored OpenCore ships placeholder serials Apple rejects).
+  source "$ROOT/lib/smbios.sh"
+  smbios_ensure
+
   local -a args=()
   local line
   while IFS= read -r line; do
