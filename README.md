@@ -62,24 +62,34 @@ settings have sane defaults:
 | `SSH_PORT` / `SSH_USER` | `2222` / `mac` | forwarded ssh |
 | `CPU_MODEL` | Skylake-Client pin | see `docs/research.md` |
 | `MAX_MACOS` | `26` | highest macOS major the installer will resolve |
-| `SMBIOS_MODEL` | `iMac19,1` | model the VM presents to Apple (`iMac20,1` = Tahoe-supported fallback) |
+| `SMBIOS_MODEL` | `iMac19,1` | model the VM presents to Apple (`iMac20,1` — Tahoe-supported, verified for sign-in) |
 | `SMBIOS_SERIAL` / `SMBIOS_MLB` / `SMBIOS_UUID` | generated | identity overrides (advanced — see below) |
 
 ## Apple ID, SMBIOS, and account safety
 
-The vendored OpenCore ships placeholder serials (`W00000000001`), which Apple's
-servers reject — Apple ID sign-in fails with "verification failed. An unknown
-error occurred." On the first `macos-vm run`, a real SMBIOS identity is
-generated (macserial algorithm, iMac19,1) and injected into the OpenCore
-config.plist; it's persisted in `data/smbios.conf` and never regenerated, so
-the VM presents one stable identity to Apple. The ROM is derived from your
-fixed NIC MAC, replacing the static placeholder every OSX-KVM user shares.
+Apple ID sign-in **works out of the box** (verified on macOS 26 Tahoe): on
+the first `macos-vm run`, the VM is set up to look like real Apple hardware,
+and it needs no account plumbing on the host — sign in through the VM's
+normal System Settings UI.
 
-macOS 15+ additionally blocks sign-in whenever the kernel reports a
-hypervisor (`kern.hv_vmm_present`) — even with perfect SMBIOS, on any VM.
-The first run also installs **VMHide** (a Lilu plugin that hides VMM
-presence from Apple ID processes) plus a Lilu upgrade into the OpenCore
-image, pinned to verified versions (see `docs/research.md`).
+The vendored OpenCore ships placeholder serials (`W00000000001`), which
+Apple's servers reject — without the setup below, sign-in fails with
+"verification failed. An unknown error occurred." On the first run,
+`macos-vm`:
+
+1. Generates a real SMBIOS identity (macserial algorithm) and injects it
+   into the OpenCore config.plist — serial, MLB, UUID, and a ROM derived
+   from your fixed NIC MAC (replacing the static placeholder every OSX-KVM
+   user shares). The identity is persisted in `data/smbios.conf` and never
+   regenerated, so the VM presents one stable identity to Apple.
+2. Installs **VMHide** (a Lilu plugin that hides VMM presence from Apple ID
+   processes) plus a Lilu upgrade into the OpenCore image. This is required:
+   macOS 15+ blocks sign-in whenever the kernel reports a hypervisor
+   (`kern.hv_vmm_present`), even with perfect SMBIOS. Versions are pinned
+   (see `docs/research.md`).
+3. Re-mounts the image read-only and **verifies the injection persisted**
+   before booting — a failed write aborts loudly instead of booting with
+   the placeholder identity.
 
 ```sh
 ./bin/macos-vm smbios show      # current identity + conf sync state
@@ -88,9 +98,10 @@ image, pinned to verified versions (see `docs/research.md`).
 ```
 
 Injection mounts the OpenCore image via `qemu-nbd` and needs sudo (once; the
-tool prints each command it runs). If Apple ID still fails on iMac19,1, switch
-models: `SMBIOS_MODEL=iMac20,1` (Tahoe-supported) in `macos-vm.conf`, then run
-`macos-vm run` — the serial/MLB regenerate for the new model, the UUID stays.
+tool prints each command it runs). If sign-in ever fails on iMac19,1, switch
+models: `SMBIOS_MODEL=iMac20,1` (Tahoe-supported) in `macos-vm.conf`, then
+run `macos-vm run` — the serial/MLB regenerate for the new model, the UUID
+stays. This VM was verified on `iMac20,1`.
 
 > **Account safety (read this).** Apple doesn't suspend developer accounts for
 > running in a VM — signing/notarizing from virtualized macOS is a normal
@@ -130,11 +141,12 @@ with the public OSK.
 ## Known limitations
 
 - No iMessage/FaceTime: sign-in needs a serial registered to Apple (a real
-  machine's serial — see the account-safety note above). Apple ID sign-in and
-  Xcode/Developer workflows work with the generated identity.
+  machine's serial — see the account-safety note above). Apple ID sign-in,
+  App Store, and Xcode/Developer workflows work with the generated identity.
 - No GPU acceleration — Xcode builds are CPU-bound, but the macOS UI is
   software-rendered (snappy, not Metal).
 - SATA is the disk path (macOS has no stock virtio-blk). Put the target disk
   on fast NVMe storage.
-- KVM's hypervisor fingerprint (CPUID leaf, `kern.hv_vmm_present`) can't be
-  hidden and isn't a sign-in gate — SMBIOS is what Apple checks.
+- The hypervisor fingerprint can't be fully hidden from the kernel
+  (`kern.hv_vmm_present` still reads 1 from a shell) — VMHide masks it from
+  Apple ID processes, which is what sign-in checks.

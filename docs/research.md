@@ -49,6 +49,8 @@ References (pinned):
 Apple ID sign-in fails ("verification failed. An unknown error occurred.")
 with the placeholder serial `W00000000001` — Apple validates serial format +
 model on their sign-in stack. Fix: generate a coherent identity and inject it.
+**Verified working end-to-end** (Tahoe 26.6.1, iMac20,1 SMBIOS, Apple ID
+sign-in succeeds).
 
 - **Algorithm**: port of acidanthera `macserial` (OpenCorePkg
   `Utilities/macserial`, BSD-3-Clause) — the serial/MLB generation and
@@ -77,7 +79,8 @@ model on their sign-in stack. Fix: generate a coherent identity and inject it.
   browser session, so it reports unreachable; osrecovery.apple.com answers
   for the board-id+sn tuple (same protocol as lib/recovery.py) but accepts
   placeholders too — neither is a hard validity gate. The authoritative test
-  is Apple ID sign-in inside the VM.
+  is Apple ID sign-in inside the VM (verified: generated serials + VMHide
+  pass; no real machine serials needed).
 - **Real serials are a hard "no" by default**: `smbios set` requires
   `ALLOW_REAL_SERIAL=1`; using a serial from a real machine you don't own is
   the documented #1 account-flag vector (serial reuse across accounts), not
@@ -94,14 +97,27 @@ verified-unused GenSMBIOS serials. macOS 15+ gates sign-in on
 Hypervisor.framework VMs" doc describes); KVM reports hv_vmm_present=1 and
 there is no QEMU flag to hide it.
 
-Fix (community-verified): **VMHide** (Carnations-Botanica/VMHide) — a Lilu
-plugin that reroutes `sysctl kern.hv_vmm_present` for Apple ID processes.
-Pinned: VMHide 2.0.0 (commit "Update for Tahoe suppot OOB"), Lilu 1.7.2
-(VMHide needs Lilu ≥ 1.7.0; the vendored OSX-KVM image ships 1.6.8, so the
-image's Lilu.kext is replaced too). Injection: same qemu-nbd mount — copy
-both .kext bundles into EFI/OC/Kexts/ and add the VMHide entry
-(MinKernel=15.0.0) to Kernel/Add. Kexts are fetched to data/vmhide/
-(pinned URLs) and the state is tracked by SMBIOS_VMHIDE=1 in smbios.conf.
+Fix (community + project-verified): **VMHide** (Carnations-Botanica/VMHide) —
+a Lilu plugin that reroutes `sysctl kern.hv_vmm_present` for Apple ID
+processes. Pinned: VMHide 2.0.0 (commit "Update for Tahoe suppot OOB"),
+Lilu 1.7.2 (VMHide needs Lilu ≥ 1.7.0; the vendored OSX-KVM image ships
+1.6.8, so the image's Lilu.kext is replaced too). Injection: same qemu-nbd
+mount — copy both .kext bundles into EFI/OC/Kexts/ and add the VMHide entry
+(MinKernel=15.0.0) to Kernel/Add. Kexts are fetched to data/vmhide/ (pinned
+URLs) and the state is tracked by SMBIOS_VMHIDE=1 in smbios.conf.
+
+**Persistence bug (fixed 2026-08-11)**: the original cleanup disconnected
+the nbd device *before* unmounting — a mounted-but-disconnected nbd discards
+its buffered filesystem writes, so the qcow2 silently stayed pristine and
+the guest kept booting placeholder SMBIOS (all early sign-in tests were
+against the placeholder identity; the "fix didn't work" symptom was this
+bug, not Apple). Correct order is umount-then-disconnect. `smbios_verify`
+now re-mounts read-only after every injection and dies loudly if the plist
+values or VMHide.kext did not persist. (The local test harness's fake umount
+masked the bug by syncing the fixture; it now enforces the order.)
+
+Verified on this project: Tahoe 26.6.1, iMac20,1 SMBIOS + VMHide → Apple ID
+sign-in succeeds.
 
 ## Full-installer-on-host path (user decision; neither reference ships this
 ## today — OSX-KVM primary flow is recovery-only via fetch-macOS-v2.py)

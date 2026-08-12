@@ -86,4 +86,10 @@ real change.
   read-only after every injection and dies loudly if the write did not
   persist or VMHide.kext is missing. Harness now enforces order (fake
   disconnect fails if the mount is still populated).
+- 2026-08-11: Apple ID sign-in VERIFIED WORKING (Tahoe 26.6.1, iMac20,1
+  SMBIOS, generated serials — no real machine serials needed). The whole
+  chain is confirmed: placeholder-SMBIOS rejection + macOS 15+ hv_vmm_present
+  sign-in gate (VMHide) were both real blockers; the persistence bug had
+  hidden that the earlier fixes were never actually applied to the guest.
+  README/research docs updated to the verified state.
 - Tooling: lint = `bash -n` on all scripts (no task runner, no tests yet).
