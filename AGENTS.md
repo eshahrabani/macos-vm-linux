@@ -130,4 +130,12 @@ real change.
   `guest-reset=off` so forwarded guest resets stop physically re-enumerating
   the phone. Fallback if EHCI ever fails (macOS drops USB 2.0): Docker-OSX's
   usbfluxd/usbmuxd-over-TCP.
+- 2026-08-17: iPhone passthrough VERIFIED WORKING on EHCI (macOS 26 Tahoe):
+  after switching the usb-host device to `bus=ehci.0` (+ `guest-reset=off`),
+  the phone enumerates in System Information → USB and Xcode Devices. The
+  qemu-xhci path is a hard no — even a clean boot with gvfs stopped still
+  flashed the trust dialog (device re-enumerated to addr ~044). Root blockers
+  were (a) gvfs-afc holding the device at boot → `libusb_set_configuration:
+  BUSY`, and (b) macOS 26 XHCI refusing to enumerate iOS composite devices on
+  QEMU xhci. Docs (README/AGENTS) updated to the verified EHCI state.
 - Tooling: lint = `bash -n` on all scripts (no task runner, no tests yet).

@@ -195,6 +195,7 @@ the QEMU command line. A phone plugged in **mid-session** needs
 The iPhone is attached to a dedicated `usb-ehci` controller: macOS's XHCI
 driver fails to enumerate iOS devices on QEMU's xhci (they connect/disconnect
 in a loop), while the USB 2.0 EHCI path — all an iPhone needs — is reliable.
+Verified working on macOS 26 Tahoe.
 
 First time: unlock the phone, tap **Trust This Computer**, and confirm in the
 guest. The iPhone then appears in **System Information → USB** and in
@@ -253,7 +254,9 @@ host. Technical pins, sources, and research: `docs/research.md`.
 
 Driver choices (stock macOS, no kexts to install): SATA disk (`ich9-ahci`),
 `virtio-net` (AppleVirtIO ships in Big Sur+), `vmware-svga` display, AppleSMC
-with the public OSK.
+with the public OSK, and two USB controllers — `qemu-xhci` for keyboard/tablet
+plus a `usb-ehci` for the passthrough iPhone (macOS's XHCI driver can't
+enumerate iOS devices on QEMU's xhci; see "iPhone / USB passthrough").
 
 ## Known limitations
 
@@ -265,6 +268,9 @@ with the public OSK.
   "Performance") to keep the UI smooth.
 - SATA is the disk path (macOS has no stock virtio-blk). Put the target disk
   on fast NVMe storage.
+- iPhone passthrough is USB 2.0 only (EHCI), and macOS 26's XHCI driver can't
+  enumerate iOS devices on QEMU's xhci at all — if a future macOS drops the
+  USB 2.0 driver, `usbfluxd` (usbmuxd-over-TCP) is the fallback.
 - The hypervisor fingerprint can't be fully hidden from the kernel
   (`kern.hv_vmm_present` still reads 1 from a shell) — VMHide masks it from
   Apple ID processes, which is what sign-in checks.
