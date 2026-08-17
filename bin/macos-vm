@@ -9,6 +9,7 @@
 #   snapshot list|save <name>|restore <name>   qcow2 snapshots (VM must be stopped)
 #   resize <size>G       grow the target disk (grow APFS in the VM: diskutil apfs resizeContainer disk0s2 0)
 #   smbios show|generate|set SERIAL MLB UUID [MODEL]|check|reset   SMBIOS identity
+#   usb list|attach [VID:PID]|detach   forward a physical iPhone into the VM
 #   tune                 apply in-guest performance tweaks (needs Remote Login on)
 #   check                verify host prerequisites
 
@@ -19,7 +20,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/lib/common.sh"
 
 usage() {
-  sed -n '2,12p' "${BASH_SOURCE[0]}" | sed 's/^#   /  /; s/^#//'
+  sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^#   /  /; s/^#//'
 }
 
 cmd_ssh() {
@@ -60,6 +61,53 @@ cmd_resize() {
   log "disk grown to $size — inside macOS run: diskutil apfs resizeContainer disk0s2 0"
 }
 
+cmd_usb() {
+  local sub="${1:-}" vid pid line
+  case "$sub" in
+    list)
+      lsusb 2>/dev/null | grep -i '05ac:' || {
+        warn "no Apple USB device found — plug in your iPhone and unlock it"
+        return 1
+      }
+      ;;
+    attach)
+      vm_running || die "VM is not running"
+      usb_gvfs_check
+      if [ -n "${2:-}" ]; then
+        vid="${2%%:*}"; pid="${2#*:}"
+        [ "$2" = "$vid:$pid" ] || die "usage: macos-vm usb attach [VID:PID]"
+      else
+        line=$(lsusb 2>/dev/null | grep -i '05ac:' | head -1) \
+          || die "no Apple device found — plug in your iPhone and unlock it"
+        vid=$(printf '%s\n' "$line" | sed -n 's/.*ID \([0-9a-f]*\):.*/\1/p')
+        pid=$(printf '%s\n' "$line" | sed -n 's/.*ID [0-9a-f]*:\([0-9a-f]*\).*/\1/p')
+      fi
+      if [ "$pid" = any ]; then
+        python3 "$ROOT/lib/hmp.py" "$MONITOR_SOCK" \
+          "device_add usb-host,id=ipassthrough,bus=ehci.0,vendorid=0x$vid,guest-reset=off" 5 strict
+      else
+        python3 "$ROOT/lib/hmp.py" "$MONITOR_SOCK" \
+          "device_add usb-host,id=ipassthrough,bus=ehci.0,vendorid=0x$vid,productid=0x$pid,guest-reset=off" 5 strict
+      fi
+      log "attached USB $vid:$pid to the VM — unlock the phone and tap Trust if prompted"
+      ;;
+    detach)
+      vm_running || die "VM is not running"
+      if python3 "$ROOT/lib/hmp.py" "$MONITOR_SOCK" "device_del usb-iphone" 5 strict 2>/dev/null; then
+        :
+      elif python3 "$ROOT/lib/hmp.py" "$MONITOR_SOCK" "device_del ipassthrough" 5 strict 2>/dev/null; then
+        :
+      else
+        die "no attached USB passthrough device found"
+      fi
+      log "USB device detached"
+      ;;
+    *)
+      die "usage: macos-vm usb {list|attach [VID:PID]|detach}"
+      ;;
+  esac
+}
+
 case "${1:-}" in
   install)  source "$ROOT/lib/install.sh"; cmd_install ;;
   run)      source "$ROOT/lib/run.sh"; cmd_run ;;
@@ -69,6 +117,7 @@ case "${1:-}" in
   snapshot) cmd_snapshot "${2:-}" "${3:-}" ;;
   resize)   cmd_resize "${2:-}" ;;
   smbios)   source "$ROOT/lib/smbios.sh"; cmd_smbios "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}" ;;
+  usb)      cmd_usb "${2:-}" "${3:-}" ;;
   tune)     source "$ROOT/lib/tune.sh"; cmd_tune ;;
   check)    prereq_check; log "host prerequisites OK" ;;
   *)        usage; exit 1 ;;

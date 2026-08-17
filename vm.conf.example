@@ -36,3 +36,12 @@
 
 # Everything VM-related lives here (downloaded images, disk, logs)
 #DATA_DIR=data
+
+# Physical iPhone forwarded into the guest for Xcode development, VID:PID.
+# Default 05ac:12a8 = iPhone in normal mode, attached at boot when plugged in.
+# Uses a dedicated usb-ehci controller (macOS's XHCI driver can't enumerate
+# iOS devices on QEMU's xhci). Use 05ac:any to also catch recovery/DFU
+# re-enumeration (also forwards other Apple USB accessories). Empty disables
+# passthrough. Hotplug via `macos-vm usb attach|detach` — stop the host's
+# gvfs-afc-volume-monitor first or QEMU can't claim the device.
+#USB_PASSTHROUGH=05ac:12a8

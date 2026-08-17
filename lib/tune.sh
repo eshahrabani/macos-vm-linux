@@ -16,7 +16,7 @@ tune_ssh() { # run a command in the guest (password prompt if no key)
 cmd_tune() {
   vm_running || die "VM is not running"
   log "applying performance tweaks in the guest (ssh $SSH_USER@localhost:$SSH_PORT)"
-  tune_ssh bash -s <<'EOF'
+  if tune_ssh bash -s <<'EOF'
 set -e
 defaults write com.apple.dock minimize-effect -string scale
 defaults write com.apple.universalaccess reduceMotion -bool true
@@ -26,10 +26,21 @@ echo "minimize-effect:    $(defaults read com.apple.dock minimize-effect)"
 echo "reduceMotion:       $(defaults read com.apple.universalaccess reduceMotion)"
 echo "reduceTransparency: $(defaults read com.apple.universalaccess reduceTransparency)"
 EOF
-  log "done — minimize/genie frozen, motion + transparency reduced."
-  log "display: set System Settings > Displays to 1280x800 (scaled) for the"
-  log "  biggest win; WindowServer renders in software, fewer pixels = faster."
-  local res
-  res="$(tune_ssh system_profiler SPDisplaysDataType 2>/dev/null | sed -n 's/.*Resolution: \([0-9]*\) x \([0-9]*\).*/\1x\2/p' | head -1)"
-  [ -n "$res" ] && log "guest display is currently ${res}"
+  then
+    log "done — minimize/genie frozen, motion + transparency reduced."
+    log "display: set System Settings > Displays to 1280x800 (scaled) for the"
+    log "  biggest win; WindowServer renders in software, fewer pixels = faster."
+    local res
+    res="$(tune_ssh system_profiler SPDisplaysDataType 2>/dev/null | sed -n 's/.*Resolution: \([0-9]*\) x \([0-9]*\).*/\1x\2/p' | head -1)"
+    [ -n "$res" ] && log "guest display is currently ${res}"
+  else
+    warn "could not run over ssh ($SSH_USER@localhost:$SSH_PORT) —"
+    warn "  check Remote Login is on and the password is right (a mac account"
+    warn "  with no password set cannot be used over ssh)."
+    warn "manual equivalent, in the VM:"
+    warn "  System Settings > Desktop & Dock > Minimize windows using: Scale effect"
+    warn "  System Settings > Accessibility > Display > Reduce motion / Reduce transparency"
+    warn "  System Settings > Displays > 1280x800 (scaled)"
+    exit 1
+  fi
 }

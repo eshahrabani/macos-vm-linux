@@ -44,6 +44,7 @@ Afterwards, plain boots:
 ./bin/macos-vm status    # running? disk? installer version?
 ./bin/macos-vm ssh       # ssh into the VM (port 2222, user: mac — or pass one)
 ./bin/macos-vm smbios    # show/generate/check/reset the Apple-facing identity
+./bin/macos-vm usb       # list/attach/detach a physical iPhone (Xcode development)
 ./bin/macos-vm tune      # in-guest performance tweaks (see "Performance")
 ./bin/macos-vm check     # verify host prerequisites
 ```
@@ -131,18 +132,20 @@ The macOS UI is software-rendered: QEMU's `vmware-svga` framebuffer has no
 macOS GPU driver, so WindowServer composites every frame on the CPU
 (AppleSoftwareRenderer). Render cost scales with pixels and animation
 complexity — the genie minimize effect at 1920x1080 is the worst offender
-(seconds-long freezes). These tweaks make the UI dramatically smoother:
+(seconds-long freezes). Tune in the VM, all clickable:
 
-```sh
-./bin/macos-vm tune      # needs Remote Login on in the guest (System Settings
-                         # > General > Sharing); sets minimize effect to "scale",
-                         # reduces motion + transparency
-```
+1. **Desktop & Dock** → "Minimize windows using": **Scale effect** — the
+   genie effect is a seconds-long freeze under software rendering.
+2. **Accessibility → Display**: toggle **Reduce motion** and
+   **Reduce transparency**.
+3. **Displays**: pick **1280x800** (scaled) — fewer pixels = proportionally
+   less WindowServer work.
+4. In the GTK window: **View → Zoom to Fit** (or just resize) — scales the
+   window up on a 4K monitor without raising the guest resolution.
 
-Then, once, in System Settings > Displays, pick **1280x800 (scaled)** — fewer
-pixels = proportionally less WindowServer work. On a 4K monitor, enlarge the
-window with the GTK menu: **View > Zoom to Fit** (scales up, guest resolution
-stays low).
+`./bin/macos-vm tune` automates steps 1-2 over ssh — it needs Remote Login on
+in the guest, and a mac account with no password can't be used over ssh. If
+ssh isn't set up, tuning by hand is the reliable path; both are equivalent.
 
 Host-side, the VM already boots with a 64 MB SVGA framebuffer and
 `cache=writeback` on the disks (I/O stalls don't compound with render stalls).
@@ -153,6 +156,90 @@ UHD 630 iGPU is disabled in BIOS, and no virtio-gpu/virgl driver exists for
 macOS. The only real path is VFIO passthrough of a dedicated AMD GPU (e.g. a
 used RX 580 — same chip iMac19,1 ships) — possible, but it needs new
 hardware and host-level setup; see `docs/research.md`.
+
+## Copy/paste and files
+
+macOS has no QEMU guest tools: there is no SPICE/virtio guest agent and no
+virtio-serial driver for macOS, so QEMU can't share a clipboard with the
+guest. Use ssh instead (Remote Login must be on):
+
+```sh
+# host -> guest clipboard: pipe text into pbcopy, paste in the VM with Cmd-V
+cat notes.txt | ssh -p 2222 mac@localhost pbcopy
+
+# guest -> host clipboard
+ssh -p 2222 mac@localhost pbpaste > notes.txt
+
+# files both ways
+scp -P 2222 file.txt mac@localhost:
+scp -P 2222 mac@localhost:/path/in/vm/file.txt .
+```
+
+## iPhone / USB passthrough
+
+Plug a physical iPhone into the host and it's forwarded into the VM for Xcode
+deployment and on-device debugging — no host-side tooling, the guest's own
+lockdownd handles pairing.
+
+```sh
+./bin/macos-vm usb list      # show attached Apple USB devices (find the PID)
+./bin/macos-vm usb attach    # hotplug the plugged-in iPhone into the running VM
+./bin/macos-vm usb attach 05ac:1281   # or pass a specific VID:PID
+./bin/macos-vm usb detach    # remove it from the VM
+```
+
+A phone plugged in **at boot** is attached automatically — the default
+`USB_PASSTHROUGH=05ac:12a8` (iPhone normal mode) in `macos-vm.conf` adds it to
+the QEMU command line. A phone plugged in **mid-session** needs
+`usb attach`. No phone present is fine in both cases (it just isn't attached).
+The iPhone is attached to a dedicated `usb-ehci` controller: macOS's XHCI
+driver fails to enumerate iOS devices on QEMU's xhci (they connect/disconnect
+in a loop), while the USB 2.0 EHCI path — all an iPhone needs — is reliable.
+
+First time: unlock the phone, tap **Trust This Computer**, and confirm in the
+guest. The iPhone then appears in **System Information → USB** and in
+**Xcode → Window → Devices and Simulators**.
+
+Before attaching, make sure the host isn't fighting for the device:
+
+```sh
+systemctl --user stop gvfs-afc-volume-monitor.service gvfs-mtp-volume-monitor.service
+```
+
+GNOME's gvfs AFC monitor claims iPhones via libusb to auto-mount them; while
+it's running, QEMU fails to configure the device (`libusb_set_configuration:
+BUSY`) and the guest never enumerates it. `macos-vm usb attach` and
+`macos-vm check` warn if it's still active. Restore auto-mount later with
+`systemctl --user start gvfs-afc-volume-monitor.service`.
+
+Caveats:
+
+- The iPhone re-enumerates with a different product ID in **recovery** (`0x1281`)
+  and **DFU** (`0x1227`) mode, so the fixed default PID drops it there —
+  re-attach with that PID or set `USB_PASSTHROUGH=05ac:any`. `any` matches the
+  whole Apple vendor, so it also forwards other Apple USB accessories
+  (keyboards/mice) into the VM.
+- If the host runs `usbmuxd` (libimobiledevice), stop it first — it competes
+  for the device: `sudo systemctl stop usbmuxd`.
+- The USB device nodes are owned by the `plugdev` group — your user must be in
+  it (this host is already set up).
+- If the device still won't enumerate on EHCI (e.g. a future macOS drops USB
+  2.0 driver support), the Docker-OSX approach is `usbfluxd`: expose the phone
+  from the host over usbmuxd TCP and connect from inside the VM — bypasses QEMU
+  USB entirely. See `docs/research.md`.
+
+## Super/Command key
+
+macOS maps the keyboard's Windows/Super key to Command, and QEMU delivers it
+correctly — the host compositor is what swallows it first. Two steps:
+
+1. **Grab the keyboard** in the VM window: `Ctrl+Alt+G` (release with
+   `Ctrl+Alt+G` again). While grabbed, all keys go to the guest.
+2. **Clear the host's Super binding** so it stops intercepting: GNOME →
+   Settings → Keyboard → View and Customize Shortcuts → System → **"Show the
+   overview"** (the Super binding) → press **Backspace** to clear it. Rebind
+   it elsewhere if you use it (e.g. Ctrl+Super). Required on Wayland, and
+   usually needed on X11 too.
 
 ## How it works
 

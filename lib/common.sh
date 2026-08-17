@@ -20,6 +20,12 @@ MAC="${MAC:-52:54:00:c9:18:27}"
 MAX_MACOS="${MAX_MACOS:-26}"
 OSK="ourhardworkbythesewordsguardedpleasedontsteal(c)AppleComputerInc"
 
+# USB device forwarded into the guest, VID:PID (Apple vendor 0x05ac).
+# Default 05ac:12a8 = iPhone in normal mode; use 05ac:any to also catch
+# recovery/DFU re-enumeration (also forwards other Apple accessories).
+# Set USB_PASSTHROUGH= (empty) to disable passthrough.
+USB_PASSTHROUGH="${USB_PASSTHROUGH-05ac:12a8}"
+
 # SMBIOS identity (see lib/smbios.sh). Generated once, persisted to
 # data/smbios.conf; SMBIOS_* here are optional overrides (macos-vm.conf).
 SMBIOS_MODEL="${SMBIOS_MODEL:-iMac19,1}"
@@ -69,6 +75,7 @@ prereq_check() {
   free_mb=$(df -Pk "$DATA_DIR" 2>/dev/null | awk 'NR==2 {print $4/1024/1024}')
   free_gb=${free_mb%.*}
   [ "$free_gb" -ge "$((DISK_SIZE_G + 40))" ] || die "need ~$((DISK_SIZE_G + 40))G free in $DATA_DIR (have ${free_gb}G) — installer + OS need headroom"
+  [ -n "$USB_PASSTHROUGH" ] && usb_gvfs_check
 }
 
 # idempotent: 1 > /sys/module/kvm/parameters/ignore_msrs (required by macOS)
@@ -121,4 +128,29 @@ vm_display_args() {
     none) echo "-display none" ;;
     *)    die "unknown VM_DISPLAY '$VM_DISPLAY' (gtk|vnc|none)" ;;
   esac
+}
+
+# QEMU device fragment for USB passthrough (USB_PASSTHROUGH=VID:PID, empty=off).
+# The iPhone lives on a dedicated usb-ehci controller: macOS's XHCI driver
+# fails to enumerate iOS devices on qemu-xhci (they connect/disconnect in a
+# loop); AppleUSBEHCI handles them reliably. guest-reset=off stops forwarded
+# guest resets from physically re-enumerating the phone.
+# VID:any matches the whole vendor (survives recovery/DFU re-enumeration).
+usb_attach_args() {
+  [ -n "$USB_PASSTHROUGH" ] || return 0
+  local vid="${USB_PASSTHROUGH%%:*}" pid="${USB_PASSTHROUGH#*:}"
+  [ "$vid" != "$USB_PASSTHROUGH" ] || die "USB_PASSTHROUGH must be VID:PID or VID:any (got '$USB_PASSTHROUGH')"
+  [ "$pid" = any ] && { echo "-device usb-host,id=usb-iphone,bus=ehci.0,vendorid=0x$vid,guest-reset=off"; return 0; }
+  echo "-device usb-host,id=usb-iphone,bus=ehci.0,vendorid=0x$vid,productid=0x$pid,guest-reset=off"
+}
+
+# GNOME's gvfs Apple File Conduit monitor claims iPhones via libusb, which makes
+# QEMU's usb-host fail with "libusb_set_configuration: BUSY" and the guest never
+# enumerates the device. Warn (don't block) if it's active.
+usb_gvfs_check() {
+  pgrep -f 'gvfs-afc-volume-monitor' >/dev/null 2>&1 && {
+    warn "gvfs-afc-volume-monitor is holding Apple USB devices — stop it first:"
+    warn "  systemctl --user stop gvfs-afc-volume-monitor.service"
+    warn "  then unplug/replug the iPhone before attaching."
+  }
 }

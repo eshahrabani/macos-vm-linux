@@ -174,6 +174,14 @@ genie minimize at 1080p caused 5-10 s freezes. Fixes (all in place):
   reduceMotion + reduceTransparency (universalaccess defaults); display set
   to 1280x800 in System Settings; GTK View > Zoom to Fit scales the window
   on the 4K monitor without raising guest res.
+- Guest tools: NONE for macOS — no SPICE vdagent, no virtio-serial driver,
+  so no QEMU clipboard sharing. Text clipboard via ssh pbcopy/pbpaste; files
+  via scp (documented in README).
+- Super key: QEMU maps evdev KEY_LEFTMETA (125) → qcode meta_l → USB HID
+  usage 0xE3 (Left GUI) → macOS Command (verified against QEMU 8.2.2
+  keycodemapdb). Works once the HOST stops eating Super: GTK keyboard grab
+  (Ctrl+Alt+G) + clear the compositor's Super binding (GNOME "Show the
+  overview" shortcut). Host-side problem, not QEMU's.
 - Host-side: `-device vmware-svga,vgamem_mb=64` (VRAM headroom) and
   `cache=writeback` on the disk drives.
 - GPU acceleration verdict: not possible on this host. macOS 26 has no

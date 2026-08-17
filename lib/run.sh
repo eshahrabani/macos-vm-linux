@@ -9,6 +9,8 @@ qemu_args() { # $1 = "" | "install" (attach installer media)
     -machine q35 \
     -device qemu-xhci,id=xhci \
     -device usb-kbd,bus=xhci.0 -device usb-tablet,bus=xhci.0 \
+    -device usb-ehci,id=ehci \
+    $(usb_attach_args) \
     -smp "$VCPU",sockets=1,cores="$VCPU",threads=1 \
     -device isa-applesmc,osk="$OSK" \
     -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \

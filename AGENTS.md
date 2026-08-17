@@ -92,12 +92,42 @@ real change.
   sign-in gate (VMHide) were both real blockers; the persistence bug had
   hidden that the earlier fixes were never actually applied to the guest.
   README/research docs updated to the verified state.
-- 2026-08-11: UI performance work. Root cause: vmware-svga has no macOS GPU
-  driver → WindowServer software-renders; genie minimize at 1080p froze the
+- 2026-08-11: UI performance work. Root cause: vmware-svga has no macOS GPU genie minimize at 1080p froze the
   VM for seconds. GPU accel verdict (documented): impossible on this host —
   no macOS 26 NVIDIA drivers (RTX 3080 useless even via VFIO), UHD 630
   disabled in BIOS, no macOS virtio-gpu driver; only path is a passthrough
   AMD GPU (e.g. used RX 580). Fixes: `macos-vm tune` (minimize-effect=scale,
   reduceMotion/reduceTransparency via ssh), guest display at 1280x800 + GTK
   Zoom to Fit, host-side vgamem_mb=64 + cache=writeback on drives.
+  Follow-ups: tune's ssh path proved unreliable on this host (no password on
+  the mac account; manual GUI tuning documented as the primary path, tune
+  prints the manual steps when ssh fails). No QEMU guest tools exist for
+  macOS (no SPICE agent/virtio-serial) → clipboard via ssh pbcopy/pbpaste,
+  files via scp (README "Copy/paste and files"). Super/Windows key: QEMU
+  already maps it to macOS Command (evdev 125 → HID 0xE3); the host
+  compositor intercepts it — fix is GTK keyboard grab (Ctrl+Alt+G) + clearing
+  GNOME's Super binding ("Show the overview" shortcut), documented in README.
+- 2026-08-17: iPhone USB passthrough for Xcode device development. `macos-vm
+  usb list|attach [VID:PID]|detach` hotplugs a physical iPhone into the running
+  VM via the existing HMP monitor socket (`device_add usb-host`); the new
+  `USB_PASSTHROUGH=VID:PID` config (default `05ac:12a8`, iPhone normal mode;
+  `05ac:any` catches recovery/DFU re-enumeration; empty disables) attaches at
+  boot when plugged in. Guest-side lockdownd handles pairing — no host
+  plumbing. lib/hmp.py gained a `strict` mode that surfaces QEMU errors.
+  Documented: unlock phone + tap Trust, recovery/DFU PIDs 0x1281/0x1227, stop
+  host usbmuxd if present, plugdev group membership.
+- 2026-08-17: iPhone still wouldn't enumerate in the guest on qemu-xhci (trust
+  dialog flashed = repeated connect/disconnect loop; System Information showed
+  only tablet/keyboard). Root causes found & fixed: (1) the boot-attached
+  usb-host had no `id`, so `usb detach` couldn't remove a poisoned device
+  without reboot — boot device now `id=usb-iphone`, detach tries both ids;
+  (2) lib/hmp.py stopped reading at the monitor banner, discarding real command
+  output — banner is now drained before sending; (3) GNOME's gvfs-afc-volume
+  -monitor claims iPhones via libusb → `libusb_set_configuration: BUSY` and the
+  guest never sees the device — `usb attach`/`check` warn to stop it;
+  (4) DECIDED: the iPhone lives on a dedicated `usb-ehci` controller (macOS's
+  AppleUSBXHCI can't enumerate iOS devices on QEMU xhci; AppleUSBEHCI works) +
+  `guest-reset=off` so forwarded guest resets stop physically re-enumerating
+  the phone. Fallback if EHCI ever fails (macOS drops USB 2.0): Docker-OSX's
+  usbfluxd/usbmuxd-over-TCP.
 - Tooling: lint = `bash -n` on all scripts (no task runner, no tests yet).
