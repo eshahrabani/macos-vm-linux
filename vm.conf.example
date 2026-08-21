@@ -45,3 +45,13 @@
 # passthrough. Hotplug via `macos-vm usb attach|detach` — stop the host's
 # gvfs-afc-volume-monitor first or QEMU can't claim the device.
 #USB_PASSTHROUGH=05ac:12a8
+
+# --- arm64 macOS (experimental research path, vmapple + TCG) ---
+# Which provisioned version `macos-vm arm64 run` boots by default (13|14|15|26)
+#ARM64_VERSION=13
+#ARM64_VCPU=8
+#ARM64_RAM=8G
+# SSH port for the arm64 guest (separate from SSH_PORT so both VMs can coexist)
+#ARM64_SSH_PORT=2223
+#ARM64_MAC=52:54:00:76:61:70
+# Extra guest boot-args (ladder debugging): e.g. ARM64_BOOT_ARGS="debug=0x14e"

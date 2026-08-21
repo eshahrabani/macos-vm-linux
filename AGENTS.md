@@ -138,4 +138,25 @@ real change.
   were (a) gvfs-afc holding the device at boot → `libusb_set_configuration:
   BUSY`, and (b) macOS 26 XHCI refusing to enumerate iOS composite devices on
   QEMU xhci. Docs (README/AGENTS) updated to the verified EHCI state.
+- 2026-08-21: arm64 macOS emulation added as a separate research path
+  (`macos-vm arm64`), goal: future-proofing (Tahoe likely the last Intel
+  macOS). Path: QEMU `vmapple` machine + TCG on the x86-64 host, pinned to
+  the 27on86 fork (steelbrain/experiment-macOS-arm64-on-linux-x86 @
+  `48e08c5e9e125d6f8286aef3e5daf90e7027e1e6`, vmapple-tcg) — upstream
+  vmapple requires HVF/Apple Silicon. State: macOS 13 boots headless (8
+  vCPU/8 GiB, SSH); macOS 14→26 is a per-version debugging ladder (M3 in
+  their terms); no GUI exists on Linux (no stock arm64 macOS display
+  driver; reims-vgpu is the only planned path). Provisioning CANNOT happen
+  on Linux: Virtualization.framework (macosvm) on any Apple Silicon Mac +
+  AVPBooter from the host — one-time manual step, docs/provisioning.md
+  (free-CI dead ends: GitHub arm64 runners can't nest VZ, Cirrus CI shut
+  down 2026-06-01; AWS mac2-m2.metal ~$21-26/24h fallback). Owner decision:
+  performance irrelevant, GUI required eventually. Implementation:
+  `lib/arm64.sh` (build/import/run/stop/status/ssh/console), `lib/qmp.py`
+  (vmapple has no HMP monitor), fork builds with pip-installed meson/ninja
+  (~/.local/bin, no sudo needed), per-boot writable clones of the imported
+  disks (reflink, plain copy on ext4), invocation mirrors 27on86
+  run-vmapple-tcg.sh (icount shift=0 + tcg-smp-final-shift=-4, -cpu max,
+  aux NVRAM validation via their set-aux-boot-args.py --check-only, ECID
+  from macosvm.json machineId plist).
 - Tooling: lint = `bash -n` on all scripts (no task runner, no tests yet).

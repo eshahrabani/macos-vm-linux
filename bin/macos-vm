@@ -12,6 +12,10 @@
 #   usb list|attach [VID:PID]|detach   forward a physical iPhone into the VM
 #   tune                 apply in-guest performance tweaks (needs Remote Login on)
 #   check                verify host prerequisites
+#   arm64 build|import <dir> <ver>|list|run [ver]|stop|status|ssh|console
+#                        arm64 macOS in QEMU's vmapple machine under TCG
+#                        (research path — needs a provisioned guest image,
+#                        see docs/provisioning.md)
 
 set -euo pipefail
 
@@ -20,7 +24,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/lib/common.sh"
 
 usage() {
-  sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^#   /  /; s/^#//'
+  sed -n '2,15p' "${BASH_SOURCE[0]}" | sed 's/^#   /  /; s/^#//'
 }
 
 cmd_ssh() {
@@ -119,6 +123,18 @@ case "${1:-}" in
   smbios)   source "$ROOT/lib/smbios.sh"; cmd_smbios "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}" ;;
   usb)      cmd_usb "${2:-}" "${3:-}" ;;
   tune)     source "$ROOT/lib/tune.sh"; cmd_tune ;;
+  arm64)    source "$ROOT/lib/arm64.sh"
+            case "${2:-}" in
+              build)   arm64_build ;;
+              import)  arm64_import "${3:-}" "${4:-}" ;;
+              list)    arm64_list ;;
+              run)     arm64_run "${3:-}" ;;
+              stop)    arm64_stop ;;
+              status)  arm64_status ;;
+              ssh)     arm64_ssh "${3:-}" ;;
+              console) arm64_console ;;
+              *) die "usage: macos-vm arm64 {build|import <dir> <ver>|list|run [ver]|stop|status|ssh|console}" ;;
+            esac ;;
   check)    prereq_check; log "host prerequisites OK" ;;
   *)        usage; exit 1 ;;
 esac

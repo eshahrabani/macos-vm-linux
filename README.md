@@ -242,6 +242,35 @@ correctly — the host compositor is what swallows it first. Two steps:
    it elsewhere if you use it (e.g. Ctrl+Super). Required on Wayland, and
    usually needed on X11 too.
 
+## arm64 macOS (experimental)
+
+`macos-vm arm64` runs an arm64 macOS guest in QEMU's `vmapple` machine under
+TCG (software emulation) — the only path to run Apple Silicon macOS on an
+x86-64 host. This is a **research path**, not a first-class flow: it needs a
+one-time provisioning step on a real Mac, is headless (SSH only, no GUI),
+and today boots macOS 13 (Ventura); newer versions are on a per-version
+debugging ladder. Motivation: Tahoe is likely the last Intel macOS — this
+keeps a path to run macOS after x86 support ends. Performance is what you'd
+expect from emulation (boot takes minutes, UI work is not feasible).
+
+```sh
+./bin/macos-vm arm64 build               # build the pinned 27on86 QEMU fork (once)
+# provision guest images on any Apple Silicon Mac — docs/provisioning.md
+# (cloud Mac rental fallback documented; free-CI paths are dead ends)
+./bin/macos-vm arm64 import <dir> 13     # adopt one provisioned version (13|14|15|26)
+./bin/macos-vm arm64 list
+./bin/macos-vm arm64 run 13              # boot headless (ssh port 2223)
+./bin/macos-vm arm64 console             # serial console (tail)
+./bin/macos-vm arm64 ssh                 # ssh into the guest (user: mac)
+./bin/macos-vm arm64 stop
+```
+
+The ssh port defaults to `2223` so the x86 VM and the arm64 VM can coexist
+(`ARM64_SSH_PORT`, `ARM64_VCPU=8`, `ARM64_RAM=8G`, `ARM64_BOOT_ARGS` in
+`macos-vm.conf`). State, the QEMU build tree, and imported images live under
+`data/arm64/`. See `docs/research.md` for the technical state of the art
+and `docs/provisioning.md` for the provisioning step.
+
 ## How it works
 
 Boot chain: OVMF (UEFI) → OpenCore (vendored prebuilt, iMac19,1 SMBIOS) →

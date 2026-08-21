@@ -158,6 +158,56 @@ sign-in succeeds.
 5. Boot: OpenCore.qcow2 (sata.2) + boot image (sata.3) + payload volume
    (sata.5) + blank target qcow2 (sata.4).
 
+## arm64 macOS on x86-64: vmapple + TCG (2026-08-21)
+
+Reference (pinned): steelbrain/experiment-macOS-arm64-on-linux-x86
+("27on86"), branch `vmapple-tcg`, commit
+`48e08c5e9e125d6f8286aef3e5daf90e7027e1e6` — a QEMU fork whose `vmapple`
+machine type boots arm64 macOS guests under TCG on an x86-64 Linux host.
+State as of the pin: **macOS 13 boots repeatably, headless, 8 vCPU/8 GiB**,
+reaching a live SSH service; clean reboot and shutdown work (E0005/E0006).
+
+- **The fork is the QEMU tree**: `git clone` the repo, `git checkout` the
+  pin, `./configure --target-list=aarch64-softmmu --enable-debug
+  --disable-docs --disable-werror`, `ninja -C build qemu-system-aarch64`.
+- **Invocation contract** (mirrored in lib/arm64.sh):
+  `-machine vmapple,uuid=<ECID>,accel=tcg,run-installer=off,
+  tcg-smp-final-shift=-4` + `-cpu max -smp 8 -m 8G -icount
+  shift=0,align=off,sleep=off`; `-bios AVPBooter.vmapple2.bin`; aux+disk
+  attached twice each (pflash-style drive + `vmapple-virtio-blk-pci` with
+  `share-rw=on,file.locking=off`); `-no-reboot -action
+  panic=pause,shutdown=pause`; serial to file; QMP-only (no HMP monitor).
+  The guest needs a **writable clone of both disks per boot** (pristine
+  imported images are never written; reflink copy, plain copy on ext4).
+- **Fork-only machinery the guest depends on**: TCG instantiation of
+  vmapple; an implementation-defined pointer-authentication (arm64e PAC)
+  compatibility mode that generates deterministic signatures across vCPUs
+  (XNU compares kernel function pointers during per-CPU interrupt
+  registration); icount shift scaling (shift 0 precise → machine steps the
+  shift to -4 after all PSCI CPUs are powered) so XNU's fixed cross-call
+  deadlines survive translated SMP execution. None of this is upstream.
+- **Guest image provisioning cannot happen on Linux**: macOS arm64 guest
+  disks come from Apple's Virtualization.framework (macosvm restore +
+  `AVPBooter.vmapple2.bin` from the host) — one-time manual step on any
+  Apple Silicon Mac (cloud rental fallback documented in
+  `docs/provisioning.md`; free-CI paths are dead: GitHub arm64 runners
+  can't nest VZ, Cirrus CI shut down 2026-06-01).
+- **Boot-args injection**: the aux image's CHRP system partitions hold
+  NVRAM variables; `set-aux-boot-args.py` (fork's scripts/27on86/) sets
+  `boot-args=` with adler32 re-checksums; `--check-only` validates the
+  NVRAM layout (banks at 0x80000-aligned offsets, one CHRP system
+  partition each) — run on every imported aux.
+- **ECID**: macosvm.json `machineId` is base64 of a binary plist carrying
+  `ECID`; extracted with python3 plistlib (lib/arm64.sh import).
+- **Revisit triggers** (do not re-litigate before these): upstream QEMU
+  merges TCG support for vmapple; or 27on86's M3 guest-version ladder
+  reaches macOS 26/27; or a stock arm64 macOS display driver exists for an
+  emulatable device (GUI — the current path has no display at all).
+- **Why arm64 is a separate research path, not a flag on the main flow**:
+  TCG is ~5-15x slower than KVM (fine here — goal is future-proofing, not
+  speed); no GPU/display (headless SSH only); guest ceiling macOS 13 until
+  the ladder advances; the x86 path stays the primary, working flow.
+
 ## Resource defaults (owner decision)
 
 8 vCPU (1 socket × 8 cores) / 12 GB / 80 GB sparse qcow2 target disk.
